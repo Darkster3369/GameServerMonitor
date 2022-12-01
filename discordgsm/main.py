@@ -267,7 +267,7 @@ def query_server_modal_handler(interaction: Interaction, game: GamedigGame, is_a
         for item in params.values():
             item.default = item._value = str(item._value).strip()
 
-        address, query_port = str(query_param['host']), str(query_param['port'])
+        game_id, address, query_port = game['id'], str(query_param['host']), str(query_param['port'])
 
         # Validate the port number
         for key in params.keys():
@@ -290,14 +290,15 @@ def query_server_modal_handler(interaction: Interaction, game: GamedigGame, is_a
 
         # Query the server
         try:
-            result = await gamedig.run({**{'type': game['id']}, **params})
-        except Exception:
-            content = t('function.query_server_modal.fail_to_query', interaction.locale).format(game_id=game['id'], address=address, query_port=query_port)
+            result = await gamedig.run({**{'type': game_id}, **params})
+        except Exception as e:
+            content = t('function.query_server_modal.fail_to_query', interaction.locale).format(game_id=game_id, address=address, query_port=query_port)
             await interaction.followup.send(content, ephemeral=True)
+            Logger.debug(f'Query servers: ({game_id})[{address}:{query_port}] Error: {e}')
             return
 
         # Create new server object
-        server = Server.new(interaction.guild_id, interaction.channel_id, game['id'], address, query_port, query_extra, result)
+        server = Server.new(interaction.guild_id, interaction.channel_id, game_id, address, query_port, query_extra, result)
         style = styles['Medium'](server)
         server.style_id = style.id
         server.style_data = await style.default_style_data(None)
@@ -311,7 +312,7 @@ def query_server_modal_handler(interaction: Interaction, game: GamedigGame, is_a
                     await webhook.send(content, embed=style.embed())
 
             server = database.add_server(server)
-            Logger.info(f'Successfully added {game["id"]} server {address}:{query_port} to #{interaction.channel.name}({interaction.channel.id}).')
+            Logger.info(f'Successfully added {game_id} server {address}:{query_port} to #{interaction.channel.name}({interaction.channel.id}).')
 
             if await resend_channel_messages(interaction):
                 await interaction.delete_original_response()
@@ -331,7 +332,7 @@ def query_server_modal_handler(interaction: Interaction, game: GamedigGame, is_a
 @app_commands.checks.dynamic_cooldown(cooldown_for_everyone_except_administrator)
 async def command_query(interaction: Interaction, game_id: str):
     """Query server"""
-    Logger.command(interaction, game_id)
+    Logger.command(interaction, game_id=game_id)
 
     if game := await find_game(interaction, game_id):
         await interaction.response.send_modal(query_server_modal_handler(interaction, game, False))
@@ -343,7 +344,7 @@ async def command_query(interaction: Interaction, game_id: str):
 @app_commands.check(is_administrator)
 async def command_addserver(interaction: Interaction, game_id: str):
     """Add server in current channel"""
-    Logger.command(interaction, game_id)
+    Logger.command(interaction, game_id=game_id)
 
     if not isinstance(interaction.channel, discord.TextChannel):
         content = t('command.addserver.text_channel_only', interaction.locale)
@@ -369,7 +370,7 @@ async def command_addserver(interaction: Interaction, game_id: str):
 @app_commands.check(is_administrator)
 async def command_delserver(interaction: Interaction, address: str, query_port: app_commands.Range[int, 0, 65535]):
     """Delete server in current channel"""
-    Logger.command(interaction, address, query_port)
+    Logger.command(interaction, address=address, query_port=query_port)
 
     if server := await find_server(interaction, address, query_port):
         await interaction.response.defer(ephemeral=True)
@@ -455,7 +456,7 @@ async def command_movedown(interaction: Interaction, address: str, query_port: a
 
 async def action_move(interaction: Interaction, address: str, query_port: int, direction: bool):
     """True if move up, otherwise move down"""
-    Logger.command(interaction, address, query_port)
+    Logger.command(interaction, address=address, query_port=query_port)
 
     if server := await find_server(interaction, address, query_port):
         await interaction.response.defer(ephemeral=True)
@@ -471,7 +472,7 @@ async def action_move(interaction: Interaction, address: str, query_port: int, d
 @app_commands.check(is_administrator)
 async def command_changestyle(interaction: Interaction, address: str, query_port: app_commands.Range[int, 0, 65535]):
     """Change server message style"""
-    Logger.command(interaction, address, query_port)
+    Logger.command(interaction, address=address, query_port=query_port)
 
     if server := await find_server(interaction, address, query_port):
         current_style = styles.get(server.style_id, styles['Medium'])(server)
@@ -507,7 +508,7 @@ async def command_changestyle(interaction: Interaction, address: str, query_port
 @app_commands.check(is_administrator)
 async def command_editstyledata(interaction: Interaction, address: str, query_port: app_commands.Range[int, 0, 65535]):
     """Edit server message style data"""
-    Logger.command(interaction, address, query_port)
+    Logger.command(interaction, address=address, query_port=query_port)
 
     if server := await find_server(interaction, address, query_port):
         style = styles.get(server.style_id, styles['Medium'])(server)
@@ -567,7 +568,7 @@ async def command_switch(interaction: Interaction, channel: discord.TextChannel,
 @app_commands.check(is_administrator)
 async def command_settimezone(interaction: Interaction, timezone: str, address: Optional[str], query_port: Optional[app_commands.Range[int, 0, 65535]]):
     """Set server message time zone"""
-    Logger.command(interaction, timezone, address, query_port)
+    Logger.command(interaction, timezone=timezone, address=address, query_port=query_port)
 
     if timezone not in timezones:
         content = t('command.settimezone.invalid', interaction.locale).format(timezone=timezone)
@@ -594,7 +595,7 @@ async def command_settimezone(interaction: Interaction, timezone: str, address: 
 @app_commands.check(is_administrator)
 async def command_setclock(interaction: Interaction, clock_format: app_commands.Choice[int], address: Optional[str], query_port: Optional[app_commands.Range[int, 0, 65535]]):
     """Set server message clock format"""
-    Logger.command(interaction, clock_format.value, address, query_port)
+    Logger.command(interaction, clock_format=clock_format.value, address=address, query_port=query_port)
 
     if servers := await find_servers(interaction, address, query_port):
         await interaction.response.defer(ephemeral=True)
@@ -615,7 +616,7 @@ async def command_setclock(interaction: Interaction, clock_format: app_commands.
 @app_commands.check(is_administrator)
 async def command_setlocale(interaction: Interaction, locale: str, address: Optional[str], query_port: Optional[app_commands.Range[int, 0, 65535]]):
     """Set server message locale"""
-    Logger.command(interaction, locale, address, query_port)
+    Logger.command(interaction, locale=locale, address=address, query_port=query_port)
 
     if locale not in set(str(value) for value in Locale):
         content = t('command.setlocale.invalid', interaction.locale).format(locale=locale)
@@ -640,7 +641,7 @@ async def command_setlocale(interaction: Interaction, locale: str, address: Opti
 @app_commands.check(is_administrator)
 async def command_setalert(interaction: Interaction, address: str, query_port: app_commands.Range[int, 0, 65535]):
     """Set server status alert settings"""
-    Logger.command(interaction, address, query_port)
+    Logger.command(interaction, address=address, query_port=query_port)
 
     if server := await find_server(interaction, address, query_port):
         # Set up button 1
@@ -805,18 +806,24 @@ async def resend_channel_messages(interaction: Optional[Interaction], channel_id
     servers = database.all_servers(channel_id=channel.id)
 
     try:
-        await channel.purge(check=lambda m: m.author == client.user, before=interaction.created_at)
+        await channel.purge(check=lambda m: m.author == client.user, before=interaction.created_at if interaction else None)
     except discord.Forbidden as e:
         # You do not have proper permissions to do the actions required.
         Logger.error(f'Channel {channel.id} channel.purge discord.Forbidden {e}')
-        content = t('missing_permission.manage_messages', interaction.locale)
-        if interaction: await interaction.followup.send(content, ephemeral=True)
+
+        if interaction:
+            content = t('missing_permission.manage_messages', interaction.locale)
+            await interaction.followup.send(content, ephemeral=True)
+
         return False
     except discord.HTTPException as e:
         # Purging the messages failed.
         Logger.error(f'Channel {channel.id} channel.purge discord.HTTPException {e}')
-        content = t('command.error.internal_error', interaction.locale)
-        if interaction: await interaction.followup.send(content, ephemeral=True)
+
+        if interaction:
+            content = t('command.error.internal_error', interaction.locale)
+            await interaction.followup.send(content, ephemeral=True)
+
         return False
 
     async for chunks in to_chunks(servers, 10):
@@ -825,14 +832,20 @@ async def resend_channel_messages(interaction: Optional[Interaction], channel_id
         except discord.Forbidden as e:
             # You do not have the proper permissions to send the message.
             Logger.error(f'Channel {channel.id} send_message discord.Forbidden {e}')
-            content = t('missing_permission.send_messages', interaction.locale)
-            if interaction: await interaction.followup.send(content, ephemeral=True)
+
+            if interaction:
+                content = t('missing_permission.send_messages', interaction.locale)
+                await interaction.followup.send(content, ephemeral=True)
+
             return False
         except discord.HTTPException as e:
             # Sending the message failed.
             Logger.error(f'Channel {channel.id} send_message discord.HTTPException {e}')
-            content = t('command.error.internal_error', interaction.locale)
-            if interaction: await interaction.followup.send(content, ephemeral=True)
+
+            if interaction:
+                content = t('command.error.internal_error', interaction.locale)
+                await interaction.followup.send(content, ephemeral=True)
+
             return False
 
         for server in chunks:
@@ -893,7 +906,10 @@ async def query_server(server: Server):
         Logger.debug(f'Query servers: ({server.game_id})[{server.address}:{server.query_port}] Success. Ping: {server.result.get("ping", -1)}ms')
     except Exception as e:
         server.status = False
-        server.result['raw']['__fail_query_count'] = int(server.result.get('raw', {}).get('__fail_query_count', '0')) + 1
+        raw = server.result.get('raw', {})
+        server.result['raw']['__fail_query_count'] = int(raw.get('__fail_query_count', '0')) + 1
+        offline_since = int(datetime.utcnow().timestamp())
+        server.result['raw']['__offline_since'] = min(int(raw.get('__offline_since', offline_since)), offline_since)
         Logger.debug(f'Query servers: ({server.game_id})[{server.address}:{server.query_port}] Error: {e}')
 
     return server
